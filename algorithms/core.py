@@ -218,6 +218,7 @@ class RlAlgorithm(nn.Module, metaclass=abc.ABCMeta):
         def thunk():
             env = gymnasium.make(gym_id, render_mode="rgb_array")
             env = gymnasium.wrappers.RecordEpisodeStatistics(env)
+            env = gymnasium.wrappers.NormalizeObservation(env)
             if capture_videos:
                 date = datetime.today().strftime("%Y-%m-%d")
                 if idx == 0:  # record actions of the first environment only

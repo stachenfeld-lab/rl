@@ -1,3 +1,9 @@
+'''
+Grid-world demo.
+
+Call from command line for human input
+'''
+
 from __future__ import annotations
 
 from minigrid.core.constants import COLOR_NAMES

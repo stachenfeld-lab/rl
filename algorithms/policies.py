@@ -33,24 +33,26 @@ class DiscretePolicy(nn.Module):
         self.nonlin = activation
         self.policy = nn.Linear(hidden_size, act_dim)
 
-    def sample(self, memory: torch.Tensor, tau: float = 1.0):
+    def sample(
+        self, memory: torch.Tensor, tau: float = 1.0, action: torch.Tensor = None
+    ):
         """
         Sample an action from the policy
         :param memory: Output of the actor network
         :param tau: Temperature parameter for the Gumbel softmax
+        :param action: Provided action to calculate the log probability of
         :return: action, action_probs, log_probs
         """
         action_logits = self.nonlin(self.policy(memory))
 
         action_probs = F.gumbel_softmax(action_logits, tau=tau, hard=True)
         action_dist = Categorical(action_probs)
-        action = action_dist.sample().view(-1, 1)
 
-        # add small number to action probs to prevent zeros
-        z = (action_probs == 0).float() * 1e-8
-        log_probs = torch.log(action_probs + z)
+        if action is None:
+            action = action_dist.sample()
 
-        return action, action_probs, log_probs
+        log_probs = action_dist.log_prob(action)
+        return action, log_probs, action_dist
 
     def act(self, memory: torch.Tensor, tau: float = 1.0):
         """
@@ -62,12 +64,12 @@ class DiscretePolicy(nn.Module):
         action_logits = self.nonlin(self.policy(memory))
         action_probs = F.gumbel_softmax(action_logits, tau=tau, hard=True)
         action_dist = Categorical(action_probs)
-        action = action_dist.sample().view(-1, 1)
+        action = action_dist.sample()
 
         return action
 
-    def forward(self, **kwargs):
-        self.sample(**kwargs)
+    def forward(self, *args, **kwargs):
+        return self.sample(*args, **kwargs)
 
 
 class GaussianPolicy(nn.Module):
@@ -99,19 +101,22 @@ class GaussianPolicy(nn.Module):
         self.log_std = nn.Parameter(torch.log(cov_matrix))
         self.act_dim = act_dim
 
-    def sample(self, memory: torch.Tensor):
+    def sample(self, memory: torch.Tensor, action: torch.Tensor = None):
         """
         Sample an action from the policy
         :param memory: Output of the actor network
+        :param action: Provided action to calculate the log probability of
         :return: action, action_probs, log_probs
         """
         action_mean = self.nonlin(self.policy(memory))
         action_std = torch.exp(self.log_std)
         action_dist = MultivariateNormal(action_mean, action_std)
-        action = action_dist.sample().view(-1, 1)
-        log_probs = action_dist.log_prob(action).view(-1, 1)
+        if action is None:
+            action = action_dist.sample()
 
-        return action, log_probs
+        log_probs = action_dist.log_prob(action)
+
+        return action, log_probs, action_dist
 
     def act(self, memory: torch.Tensor):
         """
@@ -126,8 +131,8 @@ class GaussianPolicy(nn.Module):
 
         return action
 
-    def forward(self, **kwargs):
-        self.sample(**kwargs)
+    def forward(self, *args, **kwargs):
+        return self.sample(*args, **kwargs)
 
 
 class VariableGaussianPolicy(nn.Module):
@@ -156,19 +161,21 @@ class VariableGaussianPolicy(nn.Module):
         self.log_std = nn.Linear(hidden_size, act_dim)
         self.act_dim = act_dim
 
-    def sample(self, memory: torch.Tensor):
+    def sample(self, memory: torch.Tensor, action: torch.Tensor = None):
         """
         Sample an action from the policy
         :param memory: Output of the actor network
+        :param action: Provided action to calculate the log probability of
         :return:
         """
         action_mean = self.nonlin(self.policy(memory))
         action_std = torch.diag_embed(torch.exp(self.log_std(memory)))
         action_dist = MultivariateNormal(action_mean, action_std)
-        action = action_dist.sample().view(-1, 1)
+        if action is None:
+            action = action_dist.sample()
         log_probs = action_dist.log_prob(action).view(-1, 1)
 
-        return action, log_probs
+        return action, log_probs, action_dist
 
     def act(self, memory: torch.Tensor):
         """
@@ -182,6 +189,9 @@ class VariableGaussianPolicy(nn.Module):
         action = action_dist.sample()
 
         return action
+
+    def forward(self, *args, **kwargs):
+        return self.sample(*args, **kwargs)
 
 
 class Policies(Enum):

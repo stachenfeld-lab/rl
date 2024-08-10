@@ -2,10 +2,13 @@
 
 """
 
+import pdb
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Categorical, MultivariateNormal
+from enum import Enum
+from torch.distributions import Categorical, MultivariateNormal, Normal
 
 
 class DiscretePolicy(nn.Module):
@@ -25,9 +28,7 @@ class DiscretePolicy(nn.Module):
         if activation is None:
             activation = nn.ReLU()
         else:
-            assert isinstance(
-                activation, nn.Module
-            ), "Activation must be a torch.nn.Module"
+            assert callable(activation), "Activation must be a torch.nn.functional"
 
         self.nonlin = activation
         self.policy = nn.Linear(hidden_size, act_dim)
@@ -59,7 +60,6 @@ class DiscretePolicy(nn.Module):
         :return: sampled action
         """
         action_logits = self.nonlin(self.policy(memory))
-
         action_probs = F.gumbel_softmax(action_logits, tau=tau, hard=True)
         action_dist = Categorical(action_probs)
         action = action_dist.sample().view(-1, 1)
@@ -77,6 +77,7 @@ class GaussianPolicy(nn.Module):
         policy: Network used to sample actions
         nonlin: Activation function for the policy network
         log_std: Log of the standard deviation for the normal distribution
+        act_dim: Dimension of the action space
     Methods:
         sample: Sample an action from the policy
         act: Sample an action from the policy
@@ -90,13 +91,13 @@ class GaussianPolicy(nn.Module):
         if activation is None:
             activation = nn.ReLU()
         else:
-            assert isinstance(
-                activation, nn.Module
-            ), "Activation must be a torch.nn.Module"
+            assert callable(activation), "Activation must be a torch.nn.functional"
 
         self.nonlin = activation
         self.policy = nn.Linear(hidden_size, act_dim)
-        self.log_std = nn.Parameter(torch.zeros(act_dim))
+        cov_matrix = torch.eye(act_dim) + torch.finfo(torch.float32).eps
+        self.log_std = nn.Parameter(torch.log(cov_matrix))
+        self.act_dim = act_dim
 
     def sample(self, memory: torch.Tensor):
         """
@@ -106,7 +107,6 @@ class GaussianPolicy(nn.Module):
         """
         action_mean = self.nonlin(self.policy(memory))
         action_std = torch.exp(self.log_std)
-
         action_dist = MultivariateNormal(action_mean, action_std)
         action = action_dist.sample().view(-1, 1)
         log_probs = action_dist.log_prob(action).view(-1, 1)
@@ -121,9 +121,8 @@ class GaussianPolicy(nn.Module):
         """
         action_mean = self.nonlin(self.policy(memory))
         action_std = torch.exp(self.log_std)
-
         action_dist = MultivariateNormal(action_mean, action_std)
-        action = action_dist.sample().view(-1, 1)
+        action = action_dist.sample()
 
         return action
 
@@ -132,19 +131,30 @@ class GaussianPolicy(nn.Module):
 
 
 class VariableGaussianPolicy(nn.Module):
+    """
+    Gaussian policy network that selects actions from a normal distribution with a variable standard deviation
+    Attributes:
+        policy: Network used to sample actions
+        nonlin: Activation function for the policy network
+        log_std: Log of the standard deviation for the normal distribution
+        act_dim: Dimension of the action space
+    Methods:
+        sample: Sample an action from the policy
+        act: Sample an action from
+    """
+
     def __init__(self, act_dim: int, hidden_size: int, activation: nn.Module = None):
         super().__init__()
 
         if activation is None:
             activation = nn.ReLU()
         else:
-            assert isinstance(
-                activation, nn.Module
-            ), "Activation must be a torch.nn.Module"
+            assert callable(activation), "Activation must be a torch.nn.functional"
 
         self.nonlin = activation
         self.policy = nn.Linear(hidden_size, act_dim)
         self.log_std = nn.Linear(hidden_size, act_dim)
+        self.act_dim = act_dim
 
     def sample(self, memory: torch.Tensor):
         """
@@ -153,8 +163,7 @@ class VariableGaussianPolicy(nn.Module):
         :return:
         """
         action_mean = self.nonlin(self.policy(memory))
-        action_std = torch.exp(self.log_std(memory))
-
+        action_std = torch.diag_embed(torch.exp(self.log_std(memory)))
         action_dist = MultivariateNormal(action_mean, action_std)
         action = action_dist.sample().view(-1, 1)
         log_probs = action_dist.log_prob(action).view(-1, 1)
@@ -168,9 +177,14 @@ class VariableGaussianPolicy(nn.Module):
         :return:
         """
         action_mean = self.nonlin(self.policy(memory))
-        action_std = torch.exp(self.log_std(memory))
-
+        action_std = torch.diag_embed(torch.exp(self.log_std(memory)))
         action_dist = MultivariateNormal(action_mean, action_std)
-        action = action_dist.sample().view(-1, 1)
+        action = action_dist.sample()
 
         return action
+
+
+class Policies(Enum):
+    DISCRETE = DiscretePolicy
+    GAUSSIAN = GaussianPolicy
+    VARIABLE_GAUSSIAN = VariableGaussianPolicy

@@ -8,6 +8,7 @@ example:
     inputs = torch.randn(batch_size, input_size)
 
 """
+
 import pdb
 from typing import Sequence
 
@@ -29,18 +30,23 @@ class Feedforward(nn.Module):
         **kwargs:
     """
 
-    def __init__(self, input_size: int, output_size: int, hidden_layer_sizes: Sequence = None,
-                 activation_function: nn.functional = None,
-                 output_activation: nn.functional = None,
-                 device: torch.device = None,
-                 **kwargs):
+    def __init__(
+        self,
+        input_size: int,
+        output_size: int,
+        hidden_layer_sizes: Sequence = None,
+        activation_function: nn.functional = None,
+        output_activation: nn.functional = None,
+        device: torch.device = None,
+        **kwargs
+    ):
         super(Feedforward, self).__init__()
         # define default activations
         if activation_function is None:
-            activation_function = nn.ReLU
+            activation_function = nn.ReLU()
 
         if output_activation is None:
-            output_activation = nn.Identity
+            output_activation = nn.Identity()
 
         # if hidden_layer_sizes is None
         if hidden_layer_sizes is None:
@@ -56,7 +62,7 @@ class Feedforward(nn.Module):
             if torch.cuda.is_available():
                 device = torch.device("cuda")
             elif torch.backends.mps.is_available():
-                device = torch.device('mps')
+                device = torch.device("mps")
             else:
                 device = torch.device("cpu")
         self.device = device
@@ -68,11 +74,11 @@ class Feedforward(nn.Module):
 
         for entry, size in enumerate(hidden_layer_sizes):
             modules.append(nn.Linear(previous_size, size))
-            modules.append(activation_function())
+            modules.append(activation_function)
             previous_size = size
 
         modules.append(nn.Linear(previous_size, output_size))
-        modules.append(output_activation())
+        modules.append(output_activation)
 
         self.model = nn.Sequential(*modules)
 
@@ -83,5 +89,5 @@ class Feedforward(nn.Module):
         return y
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pass

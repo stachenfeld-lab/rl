@@ -1,6 +1,7 @@
 """ This module contains the policy classes for the reinforcement learning algorithms
 
 """
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -17,15 +18,16 @@ class DiscretePolicy(nn.Module):
         sample: Sample an action from the policy
         act: Sample an action from the policy
     """
-    def __init__(
-        self, act_dim: int, hidden_size: int, activation: nn.Module = None
-    ):
+
+    def __init__(self, act_dim: int, hidden_size: int, activation: nn.Module = None):
         super().__init__()
 
         if activation is None:
             activation = nn.ReLU()
         else:
-            assert isinstance(activation, nn.Module), "Activation must be a torch.nn.Module"
+            assert isinstance(
+                activation, nn.Module
+            ), "Activation must be a torch.nn.Module"
 
         self.nonlin = activation
         self.policy = nn.Linear(hidden_size, act_dim)
@@ -79,6 +81,7 @@ class GaussianPolicy(nn.Module):
         sample: Sample an action from the policy
         act: Sample an action from the policy
     """
+
     def __init__(
         self, act_dim: int, hidden_size: int, activation: nn.functional = None
     ):
@@ -87,7 +90,9 @@ class GaussianPolicy(nn.Module):
         if activation is None:
             activation = nn.ReLU()
         else:
-            assert isinstance(activation, nn.Module), "Activation must be a torch.nn.Module"
+            assert isinstance(
+                activation, nn.Module
+            ), "Activation must be a torch.nn.Module"
 
         self.nonlin = activation
         self.policy = nn.Linear(hidden_size, act_dim)
@@ -133,7 +138,9 @@ class VariableGaussianPolicy(nn.Module):
         if activation is None:
             activation = nn.ReLU()
         else:
-            assert isinstance(activation, nn.Module), "Activation must be a torch.nn.Module"
+            assert isinstance(
+                activation, nn.Module
+            ), "Activation must be a torch.nn.Module"
 
         self.nonlin = activation
         self.policy = nn.Linear(hidden_size, act_dim)
@@ -167,4 +174,3 @@ class VariableGaussianPolicy(nn.Module):
         action = action_dist.sample().view(-1, 1)
 
         return action
-        

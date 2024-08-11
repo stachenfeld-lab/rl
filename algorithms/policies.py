@@ -98,7 +98,7 @@ class GaussianPolicy(nn.Module):
         self.nonlin = activation
         self.policy = nn.Linear(hidden_size, act_dim)
         cov_matrix = torch.eye(act_dim) + torch.finfo(torch.float32).eps
-        self.log_std = nn.Parameter(torch.log(cov_matrix))
+        self.log_std = nn.Parameter(torch.log(1e-1 * cov_matrix))
         self.act_dim = act_dim
 
     def sample(self, memory: torch.Tensor, action: torch.Tensor = None):

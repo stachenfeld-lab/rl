@@ -2,6 +2,8 @@
 
 """
 
+import pdb
+
 import numpy as np
 import torch
 
@@ -55,6 +57,7 @@ class ReplayBuffer:
         obs_dim: int,
         act_dim: int,
         size: int,
+        batch_size: int,
         hidden_size: int,
         device: torch.device,
     ):
@@ -63,6 +66,7 @@ class ReplayBuffer:
         :param obs_dim: Size of the observation space
         :param act_dim: Size of the action space
         :param size: Size of the replay buffer
+        :param batch_size: Size of the batch
         :param hidden_size: Size of rnn hidden state
         :param device: Device to run the model on
         """
@@ -71,6 +75,7 @@ class ReplayBuffer:
         self.act_dim = act_dim
         self.size = size
         self.hidden_size = hidden_size
+        self.batch_size = batch_size
         self.device = device
 
         # choose sampling episodes or time-steps
@@ -78,17 +83,17 @@ class ReplayBuffer:
         self.exploitation_batch = np.array([])
 
         # initialize buffers
-        self.obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
-        self.act_buf = np.zeros(combined_shape(size, act_dim), dtype=np.float32)
-        self.rew_buf = np.zeros(size, dtype=np.float32)
-        self.next_obs_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
-        self.done_buf = np.zeros(size, dtype=np.float32)
-        self.hidden_buf = np.zeros(combined_shape(size, hidden_size), dtype=np.float32)
+        self.obs_buf = np.zeros((size, batch_size, obs_dim), dtype=np.float32)
+        self.act_buf = np.zeros((size, batch_size, act_dim), dtype=np.float32)
+        self.rew_buf = np.zeros((size, batch_size), dtype=np.float32)
+        self.next_obs_buf = np.zeros((size, batch_size, obs_dim), dtype=np.float32)
+        self.done_buf = np.zeros((size, batch_size), dtype=np.float32)
+        self.hidden_buf = np.zeros((size, batch_size, hidden_size), dtype=np.float32)
         self.next_hidden_buf = np.zeros(
-            combined_shape(size, hidden_size), dtype=np.float32
+            (size, batch_size, hidden_size), dtype=np.float32
         )
-        self.prev_act_buf = np.zeros(combined_shape(size, act_dim), dtype=np.float32)
-        self.prev_rew_buf = np.zeros(combined_shape(size, obs_dim), dtype=np.float32)
+        self.prev_act_buf = np.zeros((size, batch_size, act_dim), dtype=np.float32)
+        self.prev_rew_buf = np.zeros((size, batch_size), dtype=np.float32)
 
         self.position, self.start_idx, self.max_size = 0, 0, size
 
@@ -157,11 +162,9 @@ class ReplayBuffer:
 
         self.exploitation_batch, self.exploration_batch = np.array([]), np.array([])
         self.position, self.start_idx = 0, 0
-        raise NotImplementedError
 
     def finish_path(self):
         path_slice = slice(self.start_idx, self.position)
-
         # fill the exploration buffer
         data = dict(
             obs=self.obs_buf[path_slice],
@@ -172,7 +175,7 @@ class ReplayBuffer:
             prev_act=self.prev_act_buf[path_slice],
             prev_rew=self.prev_rew_buf[path_slice],
             hidden=self.hidden_buf[self.start_idx],
-            next_hidden=self.next_hidden_buf[self.start_idx],
+            next_hidden=self.next_hidden_buf[path_slice],
         )
 
         # append the data to the exploration buffer

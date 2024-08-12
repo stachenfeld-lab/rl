@@ -79,7 +79,7 @@ class ActorCritic(nn.Module):
         # initialize the optimizers
         self._initialize_optimizers(**optimizer_kwargs)
 
-    def _initialize_optimizers(self, actor_lr: float = 1e-3, critic_lr: float = 1e-3):
+    def _initialize_optimizers(self, actor_lr: float = 1e-4, critic_lr: float = 1e-3):
         """
         Initialize the optimizers for the actor and critic networks
         :param actor_lr: Learning rate for the actor network
@@ -421,7 +421,7 @@ class SoftActorCritic(nn.Module):
                     self.target_actor_critic.parameters(),
                 ):
                     # w_targ = rho * w_targ + (1 - rho) * w
-                    rho = 0.995
+                    rho = 0.99
                     target_param.data.mul_(rho)
                     target_param.data.add_((1 - rho) * param.data)
 
@@ -429,25 +429,33 @@ class SoftActorCritic(nn.Module):
         self.replay_buffer.reset()
 
     def sample_episodes(
-        self, obs_map: torch.Tensor, observations: torch.Tensor, steps=50
+        self, hidden_map: torch.Tensor, observations: torch.Tensor, steps=50
     ):
 
         n_env = self.replay_buffer.batch_size
         self.actor_critic.actor.initialize_hidden(n_env)
         a2, r2 = 0, 0
         rewards = []
+        estimated_values_critic1, estimated_values_critic2 = [], []
+        plt.close("all")
+        fig, ax = plt.subplots(1, 2)
         for epoch in range(steps):
             # get observation state
             obs = observations[epoch]
 
             # get action and hidden states
             action, hidden, hidden_prev = self.actor_critic.act(obs)
-
+            with torch.no_grad():
+                q1, q2 = self.actor_critic.get_mem_value(hidden, action)
             # get reward
             with torch.no_grad():
-                reward = -torch.sqrt((action - obs @ obs_map) ** 2).sum(dim=1).squeeze()
+                reward = 10 / (
+                    torch.sqrt((action - hidden @ hidden_map) ** 2).sum(dim=1).squeeze() + 1
+                )
 
             rewards.append(reward)
+            estimated_values_critic1.append(q1)
+            estimated_values_critic2.append(q2)
 
             # get next observation state
             next_obs = observations[epoch + 1]
@@ -469,6 +477,12 @@ class SoftActorCritic(nn.Module):
             )
             a2 = action
             r2 = reward
+        ax[0].scatter(torch.stack(rewards), torch.stack(estimated_values_critic1))
+        ax[1].scatter(torch.stack(rewards), torch.stack(estimated_values_critic2))
+        ax[0].set_title("Critic 1")
+        ax[1].set_title("Critic 2")
+        fig.tight_layout()
+        plt.pause(0.1)
         # print(f"Episode Average reward: {torch.stack(rewards).mean().numpy()}.")
         self.replay_buffer.finish_path()
 
@@ -485,8 +499,8 @@ Model = SoftActorCritic(
 )
 
 reward_predictor = torch.randn(2, 1)
-obs_mapping = torch.randn(4, 2)
-steps = 50
+obs_mapping = torch.randn(32, 2)
+steps = 500
 episode_steps = 50
 observations = torch.randn((episode_steps + 1, 25, 4))
 for _ in range(steps):
